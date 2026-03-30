@@ -5,5 +5,5 @@ This repo is a skill template. When working here, you are editing the skill itse
 ## Conventions
 
 - `SKILL.md` is the source of truth for the skill definition
-- Resources in `references/` should be self-contained and referenced by relative path from SKILL.md
-- Scripts in `scripts/` should be executable and self-contained
+- `references/` contains documentation the agent loads on-demand at runtime
+- `scripts/` contains executable hook scripts — must be self-contained and portable

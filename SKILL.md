@@ -50,7 +50,7 @@ The `<CODEMAP>` block is the entry point. It tells the agent what exists and whe
 
    The agent should produce areas at **mixed depths** when the project calls for it. For example, a Next.js app might have areas at `app/api/`, `components/`, `lib/auth/`, and `prisma/` — all different depths. The path in the codemap table is the full relative path, not just one segment.
 
-3. **Group into 5-15 areas.** For each area, read 2-3 representative files to understand its purpose. Focus on what a developer would need to know to navigate — not implementation details.
+3. **Group into areas.** For each area, read 2-3 representative files to understand its purpose. Focus on what a developer would need to know to navigate — not implementation details.
 
 4. **Determine area descriptions.** Each description must be specific and useful. Good: "REST endpoints for user management, billing, and webhook ingestion." Bad: "API stuff." Include the key domains or responsibilities contained in each area.
 
@@ -91,17 +91,11 @@ The `<CODEMAP>` block is the entry point. It tells the agent what exists and whe
 
    If an area is large, the sub-document can reference further nested sub-documents (e.g., `.codemap/backend/api.md`). Use judgment on when to nest — the goal is that each document is useful on its own without being overwhelming.
 
-8. **Add `.codemap/` to `.gitignore`** unless the user explicitly wants to track it. The codemap is a generated artifact that can be regenerated.
+7. **Add `.codemap/` to `.gitignore`** unless the user explicitly wants to track it. The codemap is a generated artifact that can be regenerated.
 
-9. **Install the post-tool-use hook.** This enables automatic codemap updates when new files are created.
+8. **Install the post-tool-use hook.** This enables automatic codemap updates when new files are created.
 
-   a. Copy the hook script into the project:
-   ```bash
-   mkdir -p .claude/hooks
-   cp <skill-install-path>/scripts/post-edit-hook.sh .claude/hooks/codemap-hook.sh
-   chmod +x .claude/hooks/codemap-hook.sh
-   ```
-   Where `<skill-install-path>` is the directory containing this SKILL.md.
+   a. Create `.claude/hooks/codemap-hook.sh` by writing the contents of `scripts/post-edit-hook.sh` from this skill's install directory into the project. The agent can locate the script relative to this SKILL.md file, or if that path is unavailable, read the script content and write it directly. Make it executable with `chmod +x`.
 
    b. Add the PostToolUse hook to `.claude/settings.json`. If the file already exists, merge into the existing `hooks` config — do not overwrite other hooks. If it does not exist, create it:
    ```json
@@ -123,17 +117,18 @@ The `<CODEMAP>` block is the entry point. It tells the agent what exists and whe
    }
    ```
 
-   c. Add `.claude/hooks/` to `.gitignore` alongside `.codemap/`.
+   c. Both `.claude/hooks/` and `.claude/settings.json` should be tracked in git so teammates get the hook automatically. Do not add them to `.gitignore`.
 
 ### `codemap update` -- Refresh the Codemap
 
-1. Read the existing `<CODEMAP>` block from CLAUDE.md.
-2. Scan the current project structure.
-3. Compare against the codemap:
+1. Check that a `<CODEMAP>` block exists in CLAUDE.md and `.codemap/` exists. If either is missing, inform the user and run `codemap init` instead.
+2. Read the existing `<CODEMAP>` block from CLAUDE.md.
+3. Scan the current project structure.
+4. Compare against the codemap:
    - **New directories** not in the codemap: add to the table, generate sub-documents.
    - **Removed directories**: remove from the table, delete orphaned sub-documents.
    - **Changed areas** (new or removed files): update the relevant sub-document.
-4. Do not reorganize areas that have not changed. Preserve existing descriptions unless they are now inaccurate.
+5. Do not reorganize areas that have not changed. Preserve existing descriptions unless they are now inaccurate.
 
 ### Hook-Triggered Updates
 
@@ -179,7 +174,7 @@ Before working in an unfamiliar area, read its sub-map in `.codemap/` for file-l
 | Auth | `lib/auth/` | NextAuth.js config with Google and GitHub providers, session helpers, role-based access checks |
 | Server Actions | `lib/actions/` | Form handlers for profile updates, team management, billing operations |
 | Utilities | `lib/utils/` | Date formatters, currency helpers, Zod validation schemas, shared TypeScript types |
-| Config | `.` (root) | next.config.js, tailwind.config.ts, tsconfig.json, environment variable schemas |
+| Config | `config/` | Shared configuration: next.config.js, tailwind.config.ts, tsconfig.json, environment variable schemas |
 </CODEMAP>
 ```
 

@@ -5,6 +5,11 @@
 
 set -euo pipefail
 
+if ! command -v jq &>/dev/null; then
+  echo '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"CODEMAP_HOOK_ERROR: jq is required but not installed. Install it with: brew install jq (macOS) or apt install jq (Linux)."}}' >&2
+  exit 0
+fi
+
 INPUT=$(cat)
 
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
@@ -81,13 +86,14 @@ done <<< "$AREA_PATHS"
 
 if [[ -n "$MATCHED_AREA" ]]; then
   # File is in a known area — check if it's tracked in a sub-document
+  # Search both top-level and nested .codemap/ subdirectories
   SUBDOC=""
-  for f in "$CODEMAP_DIR"/*.md; do
-    if [[ -f "$f" ]] && grep -q "\`$MATCHED_AREA" "$f" 2>/dev/null; then
+  while IFS= read -r -d '' f; do
+    if grep -q "\`$MATCHED_AREA" "$f" 2>/dev/null; then
       SUBDOC="$f"
       break
     fi
-  done
+  done < <(find "$CODEMAP_DIR" -name '*.md' -print0 2>/dev/null)
 
   if [[ -n "$SUBDOC" ]] && ! grep -q "$REL_PATH" "$SUBDOC" 2>/dev/null; then
     cat <<HOOK_JSON
