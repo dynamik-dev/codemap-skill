@@ -78,6 +78,38 @@ The `<CODEMAP>` block is the entry point. It tells the agent what exists and whe
 
 7. **Add `.codemap/` to `.gitignore`** unless the user explicitly wants to track it. The codemap is a generated artifact that can be regenerated.
 
+8. **Install the post-tool-use hook.** This enables automatic codemap updates when new files are created.
+
+   a. Copy the hook script into the project:
+   ```bash
+   mkdir -p .claude/hooks
+   cp <skill-install-path>/scripts/post-edit-hook.sh .claude/hooks/codemap-hook.sh
+   chmod +x .claude/hooks/codemap-hook.sh
+   ```
+   Where `<skill-install-path>` is the directory containing this SKILL.md.
+
+   b. Add the PostToolUse hook to `.claude/settings.json`. If the file already exists, merge into the existing `hooks` config — do not overwrite other hooks. If it does not exist, create it:
+   ```json
+   {
+     "hooks": {
+       "PostToolUse": [
+         {
+           "matcher": "Write",
+           "hooks": [
+             {
+               "type": "command",
+               "command": ".claude/hooks/codemap-hook.sh",
+               "timeout": 10
+             }
+           ]
+         }
+       ]
+     }
+   }
+   ```
+
+   c. Add `.claude/hooks/` to `.gitignore` alongside `.codemap/`.
+
 ### `codemap update` -- Refresh the Codemap
 
 1. Read the existing `<CODEMAP>` block from CLAUDE.md.

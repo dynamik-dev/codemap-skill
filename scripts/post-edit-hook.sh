@@ -1,8 +1,7 @@
 #!/bin/bash
 # Codemap post-tool-use hook
 # Detects structural changes (new files/directories) and tells the agent to update the codemap.
-# Install: copy to your project's .claude/hooks/ and configure in .claude/settings.json
-# See references/hook-setup.md for configuration instructions.
+# Automatically installed to .claude/hooks/codemap-hook.sh during `codemap init`.
 
 set -euo pipefail
 
