@@ -29,29 +29,46 @@ The `<CODEMAP>` block is the entry point. It tells the agent what exists and whe
 
 ### `codemap init` -- Generate Initial Codemap
 
-1. **Scan the project structure.** Run `ls` at the project root. Use `Glob` to understand what's inside each top-level directory. Identify the major areas of the codebase.
+1. **Scan the project structure.** Run `ls` at the project root. Use `Glob` to understand what's inside each top-level directory.
 
-2. **Identify major areas.** Group related directories into 5-15 logical areas. For each area, read 2-3 representative files to understand its purpose. Focus on what a developer would need to know to navigate — not implementation details.
+2. **Find the meaningful boundaries.** Areas are the directories where distinct responsibilities live — not necessarily top-level directories. Many projects have a wrapper directory (`src/`, `lib/`, `packages/`, `apps/`, `internal/`, `cmd/`) that is just a container, not an area itself. The agent must descend into containers to find the real boundaries.
 
-3. **Determine area descriptions.** Each description must be specific and useful. Good: "REST endpoints for user management, billing, and webhook ingestion." Bad: "API stuff." Include the key domains or responsibilities contained in each area.
+   **How to identify a container vs. an area:**
+   - A **container** has a generic name (`src`, `lib`, `pkg`, `internal`, `cmd`, `packages`, `apps`) AND contains multiple subdirectories with distinct purposes. Do not list it as an area — list its children instead.
+   - An **area** has a specific name (`auth`, `billing`, `components`) OR contains files that serve a single cohesive purpose, even if its name is generic.
 
-4. **Write the top-level codemap.** Insert a `<CODEMAP>` block into the project's CLAUDE.md. If CLAUDE.md does not exist, create it. If it already has content, append the codemap block — never overwrite existing content.
+   **Common project layouts and where areas live:**
+
+   | Layout | Container | Areas at |
+   |--------|-----------|----------|
+   | Flat (`api/`, `models/`, `tests/`) | none | top-level |
+   | Standard (`src/api/`, `src/models/`) | `src/` | `src/*/` |
+   | Feature-based (`src/features/auth/`, `src/features/billing/`) | `src/`, `src/features/` | `src/features/*/` |
+   | Monorepo (`packages/api/`, `packages/web/`) | `packages/` | `packages/*/` |
+   | Go-style (`cmd/server/`, `internal/auth/`) | `cmd/`, `internal/` | `cmd/*/`, `internal/*/` |
+   | Mixed | varies | varies — use judgment |
+
+   The agent should produce areas at **mixed depths** when the project calls for it. For example, a Next.js app might have areas at `app/api/`, `components/`, `lib/auth/`, and `prisma/` — all different depths. The path in the codemap table is the full relative path, not just one segment.
+
+3. **Group into 5-15 areas.** For each area, read 2-3 representative files to understand its purpose. Focus on what a developer would need to know to navigate — not implementation details.
+
+4. **Determine area descriptions.** Each description must be specific and useful. Good: "REST endpoints for user management, billing, and webhook ingestion." Bad: "API stuff." Include the key domains or responsibilities contained in each area.
+
+5. **Write the top-level codemap.** Insert a `<CODEMAP>` block into the project's CLAUDE.md. If CLAUDE.md does not exist, create it. If it already has content, append the codemap block — never overwrite existing content.
 
    Use this exact format:
 
    ```
    <CODEMAP>
-   # Codemap
+   Before working in an unfamiliar area, read its sub-map in `.codemap/` for file-level detail.
 
    | Area | Path | Description |
    |------|------|-------------|
    | {Area Name} | `{path}/` | {1-line description of what's here} |
-
-   Sub-maps: `.codemap/` — read the relevant file before working in an unfamiliar area.
    </CODEMAP>
    ```
 
-5. **Generate sub-documents.** For each area in the top-level table, create `.codemap/{area-slug}.md` with this structure:
+6. **Generate sub-documents.** For each area in the top-level table, create `.codemap/{area-slug}.md` with this structure:
 
    ```markdown
    # {Area Name} — `{path}/`
@@ -72,13 +89,11 @@ The `<CODEMAP>` block is the entry point. It tells the agent what exists and whe
    - {main files a developer would start reading to understand this area}
    ```
 
-   Sub-documents should be 50-150 lines. If an area is very large, split it into sub-areas and note that in the parent sub-document.
+   If an area is large, the sub-document can reference further nested sub-documents (e.g., `.codemap/backend/api.md`). Use judgment on when to nest — the goal is that each document is useful on its own without being overwhelming.
 
-6. **Handle large projects.** If the project has more than 15 top-level areas, group related areas under headings in the codemap table. For example, group all `src/features/*` under a single "Features" area, with each feature getting its own sub-document.
+8. **Add `.codemap/` to `.gitignore`** unless the user explicitly wants to track it. The codemap is a generated artifact that can be regenerated.
 
-7. **Add `.codemap/` to `.gitignore`** unless the user explicitly wants to track it. The codemap is a generated artifact that can be regenerated.
-
-8. **Install the post-tool-use hook.** This enables automatic codemap updates when new files are created.
+9. **Install the post-tool-use hook.** This enables automatic codemap updates when new files are created.
 
    a. Copy the hook script into the project:
    ```bash
@@ -132,13 +147,13 @@ When the post-tool-use hook detects a structural change, it outputs `CODEMAP_UPD
 
 ## Constraints
 
-- The `<CODEMAP>` block must stay compact: max ~30 lines. Agents read this on every invocation.
+- **The `<CODEMAP>` block is a high-level TOC, not an exhaustive listing.** It should be scannable at a glance. Use judgment on how many entries make sense for the project — the goal is orientation, not completeness.
+- **Sub-documents can nest.** When an area is large enough that its sub-document would itself become unwieldy, break it into further sub-documents in a subdirectory (e.g., `.codemap/backend/api.md`, `.codemap/backend/auth.md`). There is no fixed depth limit — nest as deep as the codebase requires.
 - Never modify content outside the `<CODEMAP>` tags in CLAUDE.md. Other content in CLAUDE.md belongs to the user.
 - Use relative paths from the project root in all codemap entries.
-- Exclude generated/dependency directories: `node_modules/`, `.git/`, `dist/`, `build/`, `__pycache__/`, `vendor/`, `.next/`, `target/`, etc.
-- Do not list individual files in the top-level table — only directories or logical groups of directories.
-- Descriptions must be specific enough to help an agent decide whether to drill into that area. Generic labels like "utilities" or "helpers" must include what kind.
-- Sub-documents must list actual files, not just directory names. An agent reading a sub-document should know exactly what each file does without opening it.
+- **Never map secrets or sensitive files.** Do not include `.env` files, credentials, API keys, private keys, tokens, or any file that could contain secrets — in the top-level table or in sub-documents. If an entire directory exists to hold secrets or credentials, omit it from the codemap entirely.
+- **Skip ephemeral and generated content.** Use judgment to exclude build artifacts, caches, compiled output, and dependency directories — not just the common ones (`node_modules/`, `dist/`, `build/`, etc.) but anything that is generated, transient, or not human-authored source code. If you're unsure whether a directory is source or output, check for a build tool config that targets it.
+- Descriptions must be specific enough to help an agent decide whether to drill deeper. Generic labels like "utilities" or "helpers" must include what kind.
 
 ## Examples
 
@@ -153,7 +168,7 @@ user: codemap init
 
 ```
 <CODEMAP>
-# Codemap
+Before working in an unfamiliar area, read its sub-map in `.codemap/` for file-level detail.
 
 | Area | Path | Description |
 |------|------|-------------|
@@ -165,8 +180,6 @@ user: codemap init
 | Server Actions | `lib/actions/` | Form handlers for profile updates, team management, billing operations |
 | Utilities | `lib/utils/` | Date formatters, currency helpers, Zod validation schemas, shared TypeScript types |
 | Config | `.` (root) | next.config.js, tailwind.config.ts, tsconfig.json, environment variable schemas |
-
-Sub-maps: `.codemap/` — read the relevant file before working in an unfamiliar area.
 </CODEMAP>
 ```
 

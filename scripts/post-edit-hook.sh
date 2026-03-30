@@ -47,49 +47,69 @@ if [[ ! -d "$CODEMAP_DIR" ]]; then
   exit 0
 fi
 
-# Get the top-level directory of the changed file (relative to project root)
-TOP_DIR=$(echo "$REL_PATH" | cut -d'/' -f1)
-
-# Check if this top-level area is already tracked in the codemap
 CLAUDE_MD="$CWD/CLAUDE.md"
-if [[ -f "$CLAUDE_MD" ]]; then
-  if grep -q "\`$TOP_DIR/" "$CLAUDE_MD" 2>/dev/null; then
-    # Area exists — check if the specific file is tracked in the sub-document
-    AREA_SLUG=$(echo "$TOP_DIR" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+if [[ ! -f "$CLAUDE_MD" ]]; then
+  exit 0
+fi
 
-    # Find matching sub-document
-    SUBDOC=""
-    for f in "$CODEMAP_DIR"/*.md; do
-      if [[ -f "$f" ]] && grep -q "\`$TOP_DIR/" "$f" 2>/dev/null; then
-        SUBDOC="$f"
-        break
-      fi
-    done
+# Extract area paths from the CODEMAP table in CLAUDE.md
+# Parses lines like: | Area Name | `src/api/` | description |
+# Pulls out the path between backticks
+AREA_PATHS=$(sed -n '/<CODEMAP>/,/<\/CODEMAP>/p' "$CLAUDE_MD" \
+  | grep -oE '`[^`]+/`' \
+  | tr -d '`' \
+  || true)
 
-    if [[ -n "$SUBDOC" ]] && ! grep -q "$REL_PATH" "$SUBDOC" 2>/dev/null; then
-      # File is in a known area but not listed in the sub-document
-      cat <<HOOK_JSON
+if [[ -z "$AREA_PATHS" ]]; then
+  exit 0
+fi
+
+# Find which area this file belongs to (longest matching prefix wins)
+MATCHED_AREA=""
+MATCHED_LEN=0
+while IFS= read -r area_path; do
+  # Normalize: strip trailing slash for prefix matching, then add it back
+  area_prefix="${area_path%/}/"
+  if [[ "$REL_PATH" == "$area_prefix"* ]]; then
+    path_len=${#area_prefix}
+    if (( path_len > MATCHED_LEN )); then
+      MATCHED_AREA="$area_path"
+      MATCHED_LEN=$path_len
+    fi
+  fi
+done <<< "$AREA_PATHS"
+
+if [[ -n "$MATCHED_AREA" ]]; then
+  # File is in a known area — check if it's tracked in a sub-document
+  SUBDOC=""
+  for f in "$CODEMAP_DIR"/*.md; do
+    if [[ -f "$f" ]] && grep -q "\`$MATCHED_AREA" "$f" 2>/dev/null; then
+      SUBDOC="$f"
+      break
+    fi
+  done
+
+  if [[ -n "$SUBDOC" ]] && ! grep -q "$REL_PATH" "$SUBDOC" 2>/dev/null; then
+    cat <<HOOK_JSON
 {
   "hookSpecificOutput": {
     "hookEventName": "PostToolUse",
-    "additionalContext": "CODEMAP_UPDATE_NEEDED: $REL_PATH was created in existing area '$TOP_DIR'. Update the sub-document at .codemap/$(basename "$SUBDOC") to include this file."
+    "additionalContext": "CODEMAP_UPDATE_NEEDED: $REL_PATH was created in existing area '$MATCHED_AREA'. Update the sub-document at .codemap/$(basename "$SUBDOC") to include this file."
   }
 }
 HOOK_JSON
-      exit 0
-    fi
-
-    # File already tracked or sub-document not found — no action needed
-    exit 0
   fi
+  exit 0
 fi
 
-# New top-level area detected
+# File doesn't match any known area — new area detected
+# Find the most likely area path (parent directory of the new file, relative to root)
+PARENT_DIR=$(dirname "$REL_PATH")
 cat <<HOOK_JSON
 {
   "hookSpecificOutput": {
     "hookEventName": "PostToolUse",
-    "additionalContext": "CODEMAP_UPDATE_NEEDED: $REL_PATH was created in a new area '$TOP_DIR'. Add '$TOP_DIR' to the CODEMAP table in CLAUDE.md and generate a new sub-document at .codemap/${TOP_DIR}.md."
+    "additionalContext": "CODEMAP_UPDATE_NEEDED: $REL_PATH was created outside any known codemap area. Nearest directory: '$PARENT_DIR/'. Consider adding it to the CODEMAP table in CLAUDE.md and generating a sub-document."
   }
 }
 HOOK_JSON
